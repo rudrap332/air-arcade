@@ -1,0 +1,618 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id                String   @id @default(cuid())
+  email             String   @unique
+  username          String   @unique
+  password          String?
+  role              String   @default("user")
+  firstName         String?
+  lastName          String?
+  displayName       String?
+  avatar            String?
+  phone             String?
+  isEmailVerified   Boolean  @default(false)
+  isPhoneVerified   Boolean  @default(false)
+  isActive          Boolean  @default(true)
+  isBanned          Boolean  @default(false)
+  banReason         String?
+  lastLoginAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Profile
+  bio               String?
+  location          String?
+  timezone          String?
+  dateOfBirth       DateTime?
+  gender            String?
+  website           String?
+  socialLinks       Json?
+
+  // Gaming Profile
+  gamingPreferences Json?
+  favoriteGenres    String[]
+  skillLevel        String?
+  achievements      Achievement[]
+  leaderboardEntries LeaderboardEntry[]
+
+  // Relationships
+  profile           UserProfile?
+  subscription      Subscription?
+  sessions          GameSession[]
+  hostedSessions    GameSession[] @relation("SessionHost")
+  gameLibrary       UserGame[]
+  friends           Friendship[] @relation("UserFriends")
+  friendsOf         Friendship[] @relation("FriendsUser")
+  friendRequests    FriendRequest[] @relation("RequestSender")
+  friendRequestsOf  FriendRequest[] @relation("RequestReceiver")
+  notifications     Notification[]
+  payments          Payment[]
+  gameStats         GameStats[]
+  chatMessages      ChatMessage[]
+  streamSettings    StreamSettings?
+
+  @@map("users")
+}
+
+model UserProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Gaming Stats
+  totalPlayTime     Int      @default(0) // in minutes
+  gamesPlayed       Int      @default(0)
+  gamesWon          Int      @default(0)
+  gamesLost         Int      @default(0)
+  winRate           Float    @default(0)
+  rank              String?
+  level             Int      @default(1)
+  experience        Int      @default(0)
+  
+  // Preferences
+  preferredResolution String? @default("1080p")
+  preferredFPS       Int?    @default(60)
+  preferredQuality   String? @default("high")
+  autoSave           Boolean @default(true)
+  
+  // Privacy
+  isProfilePublic   Boolean  @default(true)
+  showOnlineStatus  Boolean  @default(true)
+  showGameActivity  Boolean  @default(true)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("user_profiles")
+}
+
+// Subscription Management
+model Subscription {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  planId            String
+  plan              SubscriptionPlan @relation(fields: [planId], references: [id])
+  
+  status            SubscriptionStatus @default(ACTIVE)
+  startDate         DateTime @default(now())
+  endDate           DateTime?
+  autoRenew         Boolean  @default(true)
+  cancelReason      String?
+  
+  // Billing
+  stripeSubscriptionId String?
+  stripeCustomerId    String?
+  nextBillingDate     DateTime?
+  lastBillingDate     DateTime?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("subscriptions")
+}
+
+model SubscriptionPlan {
+  id                String   @id @default(cuid())
+  name              String   @unique
+  description       String?
+  price             Decimal
+  currency          String   @default("USD")
+  billingCycle      BillingCycle @default(MONTHLY)
+  
+  // Features
+  maxResolution     String
+  maxFPS            Int
+  maxSessionDuration Int     // in minutes
+  maxConcurrentSessions Int @default(1)
+  gameLibraryAccess String  // basic, premium, ultimate
+  prioritySupport   Boolean @default(false)
+  dedicatedHardware Boolean @default(false)
+  offlineDownloads  Boolean @default(false)
+  
+  // Limits
+  monthlyDataLimit  Int?    // in GB
+  maxFriends        Int?
+  maxAchievements   Int?
+  
+  isActive          Boolean  @default(true)
+  isPopular         Boolean  @default(false)
+  sortOrder         Int      @default(0)
+  
+  // Relationships
+  subscriptions     Subscription[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("subscription_plans")
+}
+
+// Game Management
+model Game {
+  id                String   @id @default(cuid())
+  title             String
+  slug              String   @unique
+  description       String?
+  shortDescription  String?
+  
+  // Media
+  coverImage        String?
+  screenshots       String[]
+  trailerUrl        String?
+  iconUrl           String?
+  
+  // Game Details
+  genre             String[]
+  tags              String[]
+  developer         String?
+  publisher         String?
+  releaseDate       DateTime?
+  rating            String?
+  esrbRating        String?
+  pegiRating        String?
+  
+  // Technical Specs
+  minSystemRequirements Json?
+  recommendedSystemRequirements Json?
+  supportedPlatforms String[]
+  supportedResolutions String[]
+  supportedFPS      Int[]
+  
+  // Gameplay
+  multiplayer       Boolean @default(false)
+  maxPlayers        Int?
+  estimatedPlayTime Int?    // in minutes
+  difficulty        String?
+  
+  // Access Control
+  isActive          Boolean  @default(true)
+  isFree            Boolean  @default(false)
+  isPremium         Boolean  @default(false)
+  isEarlyAccess     Boolean  @default(false)
+  requiredSubscription String? // basic, pro, ultimate
+  
+  // Statistics
+  totalPlayTime     Int      @default(0)
+  totalSessions     Int      @default(0)
+  averageRating     Float    @default(0)
+  totalRatings      Int      @default(0)
+  popularityScore   Float    @default(0)
+  
+  // Relationships
+  userGames         UserGame[]
+  sessions          GameSession[]
+  achievements      Achievement[]
+  leaderboards      Leaderboard[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("games")
+}
+
+model UserGame {
+  id                String   @id @default(cuid())
+  userId            String
+  gameId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game              Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  
+  // Game Progress
+  playTime          Int      @default(0) // in minutes
+  lastPlayed        DateTime?
+  isFavorite        Boolean  @default(false)
+  isInstalled       Boolean  @default(false)
+  
+  // User Preferences
+  customSettings    Json?
+  keyBindings       Json?
+  graphicsSettings  Json?
+  
+  // Achievements
+  achievementsUnlocked Int   @default(0)
+  totalAchievements     Int  @default(0)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([userId, gameId])
+  @@map("user_games")
+}
+
+// Game Sessions & Streaming
+model GameSession {
+  id                String   @id @default(cuid())
+  gameId            String
+  hostId            String
+  game              Game     @relation(fields: [gameId], references: [id])
+  host              User     @relation("SessionHost", fields: [hostId], references: [id])
+  
+  // Session Details
+  sessionCode       String   @unique
+  title             String?
+  description       String?
+  maxViewers        Int      @default(1)
+  currentViewers    Int      @default(0)
+  
+  // Status
+  status            SessionStatus @default(WAITING)
+  isPublic          Boolean  @default(true)
+  isRestricted      Boolean  @default(false)
+  
+  // Settings
+  resolution        String   @default("1080p")
+  fps               Int      @default(60)
+  quality           String   @default("high")
+  enableChat        Boolean  @default(true)
+  allowScreenControl Boolean @default(false)
+  enableSandbox     Boolean @default(true)
+  
+  // Timing
+  startTime         DateTime?
+  endTime           DateTime?
+  duration          Int?     // in minutes
+  
+  // Performance
+  avgLatency        Float?
+  avgFPS            Float?
+  streamQuality     String?
+  
+  // Relationships
+  viewers           SessionViewer[]
+  chatMessages      ChatMessage[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("game_sessions")
+}
+
+model SessionViewer {
+  id                String   @id @default(cuid())
+  sessionId         String
+  userId            String
+  session           GameSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  // Viewer Details
+  joinedAt          DateTime @default(now())
+  leftAt            DateTime?
+  watchTime         Int      @default(0) // in minutes
+  isActive          Boolean  @default(true)
+  
+  // Permissions
+  canChat           Boolean  @default(true)
+  canControl        Boolean  @default(false)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([sessionId, userId])
+  @@map("session_viewers")
+}
+
+// Streaming & Performance
+model StreamSettings {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Quality Settings
+  preferredResolution String @default("1080p")
+  preferredFPS       Int    @default(60)
+  preferredBitrate   Int?   // in kbps
+  enableHDR          Boolean @default(false)
+  
+  // Audio Settings
+  audioQuality       String @default("high")
+  enableVoiceChat    Boolean @default(true)
+  microphoneDevice   String?
+  speakerDevice      String?
+  
+  // Network Settings
+  maxLatency         Int     @default(50) // in ms
+  adaptiveQuality    Boolean @default(true)
+  enableBandwidthOptimization Boolean @default(true)
+  
+  // Privacy Settings
+  showOnlineStatus   Boolean @default(true)
+  allowFriendRequests Boolean @default(true)
+  showGameActivity   Boolean @default(true)
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("stream_settings")
+}
+
+// Performance Monitoring
+model GameStats {
+  id                String   @id @default(cuid())
+  userId            String
+  gameId            String
+  sessionId         String?
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Performance Metrics
+  fps               Float?
+  latency           Float?
+  packetLoss        Float?
+  bandwidth         Float?
+  cpuUsage          Float?
+  gpuUsage          Float?
+  memoryUsage       Float?
+  
+  // Session Data
+  sessionDuration   Int?     // in minutes
+  startTime         DateTime @default(now())
+  endTime           DateTime?
+  
+  // Quality Metrics
+  streamQuality     String?
+  resolution        String?
+  bitrate           Float?
+  
+  createdAt         DateTime @default(now())
+
+  @@map("game_stats")
+}
+
+// Social Features
+model Friendship {
+  id                String   @id @default(cuid())
+  userId            String
+  friendId          String
+  user              User     @relation("UserFriends", fields: [userId], references: [id], onDelete: Cascade)
+  friend            User     @relation("FriendsUser", fields: [friendId], references: [id], onDelete: Cascade)
+  
+  status            FriendshipStatus @default(PENDING)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([userId, friendId])
+  @@map("friendships")
+}
+
+model FriendRequest {
+  id                String   @id @default(cuid())
+  senderId          String
+  receiverId        String
+  sender            User     @relation("RequestSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver          User     @relation("RequestReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  message           String?
+  status            FriendRequestStatus @default(PENDING)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([senderId, receiverId])
+  @@map("friend_requests")
+}
+
+// Chat System
+model ChatMessage {
+  id                String   @id @default(cuid())
+  sessionId         String?
+  userId            String
+  session           GameSession? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  message           String
+  messageType       MessageType @default(TEXT)
+  isSystem          Boolean  @default(false)
+  isDeleted         Boolean  @default(false)
+  
+  createdAt         DateTime @default(now())
+
+  @@map("chat_messages")
+}
+
+// Achievements & Leaderboards
+model Achievement {
+  id                String   @id @default(cuid())
+  gameId            String
+  userId            String
+  game              Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name              String
+  description       String?
+  icon              String?
+  points            Int      @default(0)
+  rarity            String?
+  unlockedAt        DateTime @default(now())
+  
+  createdAt         DateTime @default(now())
+
+  @@unique([gameId, userId, name])
+  @@map("achievements")
+}
+
+model Leaderboard {
+  id                String   @id @default(cuid())
+  gameId            String
+  game              Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  
+  name              String
+  description       String?
+  type              LeaderboardType @default(SCORE)
+  isGlobal          Boolean  @default(true)
+  isActive          Boolean  @default(true)
+  
+  // Relationships
+  entries           LeaderboardEntry[]
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("leaderboards")
+}
+
+model LeaderboardEntry {
+  id                String   @id @default(cuid())
+  leaderboardId     String
+  userId            String
+  leaderboard       Leaderboard @relation(fields: [leaderboardId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  score             Float
+  rank              Int?
+  metadata          Json?
+  achievedAt        DateTime @default(now())
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([leaderboardId, userId])
+  @@map("leaderboard_entries")
+}
+
+// Notifications
+model Notification {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title             String
+  message           String
+  type              NotificationType
+  isRead            Boolean  @default(false)
+  data              Json?
+  
+  createdAt         DateTime @default(now())
+  readAt            DateTime?
+
+  @@map("notifications")
+}
+
+// Payment & Billing
+model Payment {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  amount            Decimal
+  currency          String   @default("USD")
+  status            PaymentStatus
+  paymentMethod     String?
+  
+  // Stripe
+  stripePaymentIntentId String?
+  stripeChargeId        String?
+  
+  // Metadata
+  description       String?
+  metadata          Json?
+  
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@map("payments")
+}
+
+// Enums
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  PAST_DUE
+  UNPAID
+  TRIAL
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+  WEEKLY
+  DAILY
+}
+
+enum SessionStatus {
+  WAITING
+  ACTIVE
+  PAUSED
+  ENDED
+  CANCELLED
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  BLOCKED
+}
+
+enum FriendRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  SYSTEM
+}
+
+enum LeaderboardType {
+  SCORE
+  TIME
+  DISTANCE
+  KILLS
+  WINS
+  CUSTOM
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  FRIEND_REQUEST
+  ACHIEVEMENT
+  SESSION_INVITE
+  PAYMENT
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  REFUNDED
+}
